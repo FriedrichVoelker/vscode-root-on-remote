@@ -12,12 +12,13 @@ let settings;
 let SUDO_PASSWORD;
 
 let globalContext;
+let statusBarItem;
+
+const isRemote = () => {
+	return vscode.env.remoteName !== undefined;
+}
 
 async function activate(context) {
-	const isRemote = () => {
-		return vscode.env.remoteName !== undefined;
-	}
-	
 	
 	globalContext = context;
 
@@ -28,18 +29,22 @@ async function activate(context) {
 		SUDO_PASSWORD = await handleGetSudoPassword()
 	}
 
+	createStatusBarItem()
+	handleStatusBarItem()
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with  registerCommand
 	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('save-as-root-on-remote.isRemote', function () {
+	context.subscriptions.push(vscode.commands.registerCommand('save-as-root-on-remote.isRemote', function () {
 		// The code you place here will be executed every time your command is executed
 
 		// Display a message box to the user
 		vscode.window.showInformationMessage(isRemote() ? "Remote\nName: " + vscode.env.remoteName + "\nuriScheme: " + vscode.env.uriScheme : "Local");
-	});
+	}));
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(vscode.commands.registerCommand("save-as-root-on-remote.changeCurrentPassword", function(){
+		handleSetSudoPassword()
+	}))
 
 
 	context.subscriptions.push(vscode.commands.registerCommand('save-as-root-on-remote.saveAsRoot', async function () {
@@ -84,18 +89,19 @@ async function activate(context) {
     const sudoWriteFile = async (filename, content) => {
 		return new Promise(async (resolve, reject) => {
 		
-		let manualPassword = false;
+		let firstPasswordTry = true;
 
 		if(settings.get("savePasswordsInFile") !== true && SUDO_PASSWORD === undefined){
 			SUDO_PASSWORD = await vscode.window.showInputBox({
 				prompt: "Enter sudo password",
-				password: true
+				password: true,
+				placeHolder: "Password of " + os.userInfo().username
 			})
-			manualPassword = true;
 		}else if(settings.get("savePasswordsInFile") === true && SUDO_PASSWORD === undefined){
 			SUDO_PASSWORD = await handleSetSudoPassword()
 		}
-
+		
+		handleStatusBarItem()
 		cp.exec('test -w ' + filename +'; echo "$?"', function(error, stdout, stderr) {
 			if (error) {
 				console.error(`exec error: ${error}`);
@@ -112,23 +118,34 @@ async function activate(context) {
 				p.stderr?.on("data", async (data) => {
 					const lines = data.toString().split("\n").map((line) => line.trim())
 					if(lines.includes("password:")) {
-						if(manualPassword === true){
-							if(settings.get("savePasswordsInFile") !== true && SUDO_PASSWORD === undefined){
+						if(firstPasswordTry === false){
+							handleClearSudoPassword()
+							handleStatusBarItem()
+							if(settings.get("savePasswordsInFile") !== true){
 								SUDO_PASSWORD = await vscode.window.showInputBox({
 									prompt: "Enter sudo password",
-									password: true
+									password: true,
+									placeHolder: "Password of " + os.userInfo().username
 								})
-								manualPassword = true;
-							}else if(settings.get("savePasswordsInFile") === true && SUDO_PASSWORD === undefined){
+								firstPasswordTry = false;
+								p.stdin.write(`${SUDO_PASSWORD}\n`);
+							}else if(settings.get("savePasswordsInFile") === true){
 								SUDO_PASSWORD = await handleSetSudoPassword()
+								p.stdin.write(`${SUDO_PASSWORD}\n`);
 							}
+						}else{
+							p.stdin.write(`${SUDO_PASSWORD}\n`);
+							firstPasswordTry = false;
 						}
-						p.stdin.write(`${SUDO_PASSWORD}\n`);
-						manualPassword = true;
 					}else if(lines.includes("file contents:")) {
 						p.stdin?.write(content);
 						p.stdin?.end();
 						stderr += lines.slice(lines.lastIndexOf("file contents:") + 1).join("\n")
+					}else if(lines.includes("sudo: 3 incorrect password attempts")) {
+						handleClearSudoPassword()
+						handleStatusBarItem()
+						vscode.window.showErrorMessage("Incorrect password");
+						reject();
 					}else{
 						stderr += data.toString()
 					}
@@ -136,6 +153,7 @@ async function activate(context) {
 
 				p.on("exit", (code) => {
 					if(code == 0) {
+						handleStatusBarItem()
 						resolve();
 					}else{
 						reject();
@@ -199,15 +217,42 @@ async function activate(context) {
 
 }
 
+const createStatusBarItem = async () => {
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
+	statusBarItem.accessibilityInformation = {
+		label: "Save as Root"
+	}
+	statusBarItem.command = "save-as-root-on-remote.saveAsRoot"
+	statusBarItem.show()
+}
+const handleStatusBarItem = async () => {
+	if(isRemote() === true){
+		if(SUDO_PASSWORD != null ){
+			statusBarItem.text = "$(workspace-trusted)"
+			statusBarItem.tooltip = "Save as Root - Password known"
+		}else {
+			statusBarItem.text = "$(workspace-untrusted)"
+			statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
+			statusBarItem.tooltip = "Save as Root - Password unknown"
+		}
+	}
+}
+
+const handleClearSudoPassword = async () => {
+	SUDO_PASSWORD = null
+	globalContext["secrets"].delete(vscode.env.machineId)
+}
+
 const handleSetSudoPassword = async() => {
 	SUDO_PASSWORD = await vscode.window.showInputBox({
 		prompt: "Enter sudo password",
-		password: true
+		password: true,
+		placeHolder: "Password of " + os.userInfo().username
 	})
-	if(SUDO_PASSWORD !== undefined){
+	if(SUDO_PASSWORD != null){
 		globalContext["secrets"].store(vscode.env.machineId, SUDO_PASSWORD)
 	}
-	return handleGetSudoPassword()
+	return SUDO_PASSWORD
 }
 
 const handleGetSudoPassword = async () =>{
@@ -218,7 +263,7 @@ const handleGetSudoPassword = async () =>{
 	}
 
 
-	return ""
+	return undefined
 }
 
 // this method is called when your extension is deactivated

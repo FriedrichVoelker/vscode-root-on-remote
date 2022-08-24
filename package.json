@@ -24,6 +24,11 @@
         "command": "save-as-root-on-remote.saveAsRoot",
         "title": "Save As Root on Remote",
         "category": "Save As Root on Remote"
+      },
+      {
+        "command": "save-as-root-on-remote.changeCurrentPassword",
+        "title": "Change Current Password",
+        "category": "Save As Root on Remote"
       }
     ],
     "keybindings": [
