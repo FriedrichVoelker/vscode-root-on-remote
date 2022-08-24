@@ -2,12 +2,23 @@
   "name": "save-as-root-on-remote",
   "displayName": "save as root on remote",
   "description": "Use sudo to save files on a remote connection when using Remote - SSH",
-  "version": "0.0.1",
+  "version": "0.0.2",
+  "publisher": "FriedrichVoelker",
+  "keywords": ["remote", "ssh", "sudo", "save"],
+  "license": "MIT",
+  "extensionKind": [
+    "workspace"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lan1friedrich/vscode-root-on-remote"
+  },
+  "icon": "images/logo.png",
   "engines": {
     "vscode": "^1.70.0"
   },
   "categories": [
-    "Other"
+    "Other", "Extension Packs"
   ],
   "activationEvents": [
     "onStartupFinished"
