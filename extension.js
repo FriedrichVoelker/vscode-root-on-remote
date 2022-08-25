@@ -39,7 +39,7 @@ async function activate(context) {
 		// The code you place here will be executed every time your command is executed
 
 		// Display a message box to the user
-		vscode.window.showInformationMessage(isRemote() ? "Remote\nName: " + vscode.env.remoteName + "\nuriScheme: " + vscode.env.uriScheme : "Local");
+		vscode.window.showInformationMessage(isRemote() ? "Yes! RemoteName: " + vscode.env.remoteName : "Local");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand("save-as-root-on-remote.changeCurrentPassword", function(){
@@ -230,6 +230,7 @@ const handleStatusBarItem = async () => {
 		if(SUDO_PASSWORD != null ){
 			statusBarItem.text = "$(workspace-trusted)"
 			statusBarItem.tooltip = "Save as Root - Password known"
+			statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.background')
 		}else {
 			statusBarItem.text = "$(workspace-untrusted)"
 			statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
